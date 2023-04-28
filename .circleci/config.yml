@@ -12,6 +12,9 @@ executors:
   ruby:
     docker:
       - image: cimg/ruby:3.2.2
+  terraform:
+    docker:
+      - image: cimg/deploy:2023.03
 
 jobs:
   assume-role:
@@ -33,25 +36,60 @@ jobs:
             echo export AWS_SECRET_ACCESS_KEY="$(echo $aws_sts_credentials | jq -r '.SecretAccessKey')" >> $BASH_ENV
             echo export AWS_SESSION_TOKEN="$(echo $aws_sts_credentials | jq -r '.SessionToken')" >> $BASH_ENV
             source $BASH_ENV
-
+      - run:
+          name: check aws credentials
+          command: |
+            echo "AWS_ACCESS_KEY_ID : " ${AWS_ACCESS_KEY_ID}
+            echo "AWS_SECRET_ACCESS_KEY : " ${AWS_SECRET_ACCESS_KEY}
+      - run: |
+          cp $BASH_ENV bash.env
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bash.env
+  check-env-vars:
+    executor: node
+    steps:
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run:
+          name: set aws credentials
+          command: |
+            echo "AWS_ACCESS_KEY_ID : " ${AWS_ACCESS_KEY_ID}
+            echo "AWS_SECRET_ACCESS_KEY : " ${AWS_SECRET_ACCESS_KEY}
   execute-terraform:
-    executor: terraform/default
+    executor: terraform
     steps:
       - checkout
+      - aws-cli/install
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run:
+          name: set aws credentials
+          command: |
+            echo "AWS_ACCESS_KEY_ID : " ${AWS_ACCESS_KEY_ID}
+            echo "AWS_SECRET_ACCESS_KEY : " ${AWS_SECRET_ACCESS_KEY}
+          # sed -i "2a \    access_key\ \=\ \"${AWS_ACCESS_KEY_ID}\"\n \    secret_key\ \=\ \"${AWS_SECRET_ACCESS_KEY}\"" terraform/provider.tf
       - terraform/init:
-          path: .
+          path: terraform
       - terraform/validate:
-          path: .
-      - terraform/fmt:
-          path: .
+          path: terraform
       - terraform/apply:
-          path: .
-    working_directory: ~/terraform
+          path: terraform
+          var: 'pgp_key=${GPG_KEY}'
 
   set-env-vars:
     executor: node
     steps:
       - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
       - aws-cli/install
       - run: 
           name: set environment variables
@@ -69,7 +107,7 @@ jobs:
             touch ~/secret_key.base64
             echo ${S3_IAM_SECRET_ACCESS_KEY_ENCRYPTED} > ~/secret_key.base64
             base64 --decode -i ~/secret_key.base64 -o ~/secret_key.txt
-            gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" -o ~/secret_key --decrypt ~/secret_key.txt
+            gpg --no-tty --batch --passphrase "${GPG_PASSPHRASE}" -o ~/secret_key --decrypt ~/secret_key.txt
             echo export S3_IAM_SECRET_ACCESS_KEY="$(cat secret_key)" >> $BASH_ENV
             source $BASH_ENV
       - run:
@@ -136,6 +174,9 @@ workflows:
     jobs:
       - assume-role:
           context: aws
+      - check-env-vars:
+          requires:
+            - assume-role
       - execute-terraform:
           requires:
             - assume-role
