@@ -44,8 +44,6 @@ jobs:
           path: .
       - terraform/fmt:
           path: .
-      - terraform/plan:
-          path: .
       - terraform/apply:
           path: .
     working_directory: ~/terraform
