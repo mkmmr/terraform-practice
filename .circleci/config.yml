@@ -1,0 +1,152 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@3.1.5
+  ansible-playbook: orbss/ansible-playbook@0.0.5
+  terraform: circleci/terraform@3.2.1
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:18.16.0
+  ruby:
+    docker:
+      - image: cimg/ruby:3.2.2
+
+jobs:
+  assume-role:
+    executor: node
+    steps:
+      - checkout
+      - aws-cli/install
+      - run:
+          name: Assume role
+          command: |
+            aws_sts_credentials=$(aws sts assume-role-with-web-identity \
+              --role-arn ${AWS_IAM_ROLE_ARN} \
+              --web-identity-token ${CIRCLE_OIDC_TOKEN} \
+              --role-session-name "circleci-oidc" \
+              --duration-seconds 1800 \
+              --query "Credentials" \
+              --output "json")
+            echo export AWS_ACCESS_KEY_ID="$(echo $aws_sts_credentials | jq -r '.AccessKeyId')" >> $BASH_ENV
+            echo export AWS_SECRET_ACCESS_KEY="$(echo $aws_sts_credentials | jq -r '.SecretAccessKey')" >> $BASH_ENV
+            echo export AWS_SESSION_TOKEN="$(echo $aws_sts_credentials | jq -r '.SessionToken')" >> $BASH_ENV
+            source $BASH_ENV
+
+  execute-terraform:
+    executor: terraform/default
+    steps:
+      - checkout
+      - terraform/init:
+          path: .
+      - terraform/validate:
+          path: .
+      - terraform/fmt:
+          path: .
+      - terraform/plan:
+          path: .
+      - terraform/apply:
+          path: .
+    working_directory: ~/terraform
+
+  set-env-vars:
+    executor: node
+    steps:
+      - checkout
+      - aws-cli/install
+      - run: 
+          name: set environment variables
+          command: |
+            set -x
+            echo export EC2_PUBLIC_IP_ADDRESS="$(aws ec2 describe-instances | jq '.Reservations[].Instances[] | select( .State.Name=="running" and .Tags[].Value=="CircleciEC2").PublicIpAddress')" >> $BASH_ENV
+            echo export AWS_ALB="$(aws elbv2 describe-load-balancers | jq '.LoadBalancers[] | select ( .LoadBalancerName=="CFn-raisetech-alb").DNSName')" >> $BASH_ENV
+            echo export S3_IAM_ACCESS_KEY="$(aws cloudformation describe-stacks --stack-name CircleciIAM | jq -r '.Stacks[] | .Outputs[] | select(.OutputKey == "StackIAMAccessKey")| .OutputValue')" >> $BASH_ENV
+            echo export S3_IAM_SECRET_ACCESS_KEY_ENCRYPTED="$(aws cloudformation describe-stacks --stack-name CircleciIAM | jq -r '.Stacks[] | .Outputs[] | select(.OutputKey == "StackIAMSecretAccessKey")| .OutputValue')" >> $BASH_ENV
+            echo export S3_BUCKET_NAME="$(aws s3 ls | sort -nr | head -n 1 | awk '{print $NF}')" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: decode $S3_IAM_SECRET_ACCESS_KEY
+          command: |
+            touch ~/secret_key.base64
+            echo ${S3_IAM_SECRET_ACCESS_KEY_ENCRYPTED} > ~/secret_key.base64
+            base64 --decode -i ~/secret_key.base64 -o ~/secret_key.txt
+            gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" -o ~/secret_key --decrypt ~/secret_key.txt
+            echo export S3_IAM_SECRET_ACCESS_KEY="$(cat secret_key)" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: cat env vars
+          command: |
+            echo "EC2_PUBLIC_IP_ADDRESS : " ${EC2_PUBLIC_IP_ADDRESS}
+            echo "AWS_ALB : " ${AWS_ALB}
+            echo "S3_IAM_ACCESS_KEY : " ${S3_IAM_ACCESS_KEY}
+            echo "S3_IAM_SECRET_ACCESS_KEY : " ${S3_IAM_SECRET_ACCESS_KEY}
+            echo "S3_BUCKET_NAME : " ${S3_BUCKET_NAME}
+      - run: |
+          cp $BASH_ENV bash.env
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bash.env
+
+  execute-ansible:
+    executor: ansible-playbook/default
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run:
+          name: set inventory file
+          command: sed -i "1i ansible_dev_target ansible_host=${EC2_PUBLIC_IP_ADDRESS} ansible_connection=ssh ansible_user=ec2-user" ansible/inventory
+      - add_ssh_keys:
+          fingerprints:
+            - "a8:4a:8c:12:da:47:4a:2f:30:7c:1d:2a:0e:24:0f:67"
+      - ansible-playbook/install:
+          version: 2.10.7
+      - ansible-playbook/playbook:
+          playbook: ansible/playbook.yml
+          playbook-options: '-i ansible/inventory'
+
+  execute-serverspec:
+    executor: ruby
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run:
+          name: install serverspec
+          command: gem install serverspec
+      - run:
+          name: create ~/.ssh/config file
+          command: |
+            touch ~/.ssh/config
+            echo 'Host ec2' > ~/.ssh/config
+            sed -i "1a \  HostName\ ${EC2_PUBLIC_IP_ADDRESS}\n\  User\ ec2-user\n\  IdentityFile \$\{KEY_FINGERPRINT\}" ~/.ssh/config
+      - run: 
+          name: execute serverspece
+          command: |
+            cd serverspec
+            rake spec
+
+workflows:
+  version: 2
+  release:
+    jobs:
+      - assume-role:
+          context: aws
+      - execute-terraform:
+          requires:
+            - assume-role
+      - set-env-vars:
+          requires:
+              - execute-terraform
+      # - execute-ansible:
+      #     requires:
+      #         - set-env-vars
+      # - execute-serverspec:
+      #     requires:
+      #         - execute-ansible
