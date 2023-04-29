@@ -14,7 +14,10 @@ executors:
       - image: cimg/ruby:3.2.2
   terraform:
     docker:
-      - image: cimg/deploy:2023.03
+      - image: cimg/deploy:2023.04
+  ubuntu:
+    docker:
+      - image: cimg/base:2023.04
 
 jobs:
   assume-role:
@@ -36,44 +39,20 @@ jobs:
             echo export AWS_SECRET_ACCESS_KEY="$(echo $aws_sts_credentials | jq -r '.SecretAccessKey')" >> $BASH_ENV
             echo export AWS_SESSION_TOKEN="$(echo $aws_sts_credentials | jq -r '.SessionToken')" >> $BASH_ENV
             source $BASH_ENV
-      - run:
-          name: check aws credentials
-          command: |
-            echo "AWS_ACCESS_KEY_ID : " ${AWS_ACCESS_KEY_ID}
-            echo "AWS_SECRET_ACCESS_KEY : " ${AWS_SECRET_ACCESS_KEY}
       - run: |
           cp $BASH_ENV bash.env
       - persist_to_workspace:
           root: .
           paths:
             - bash.env
-  check-env-vars:
-    executor: node
-    steps:
-      - attach_workspace:
-          at: .
-      - run: |
-          cat bash.env >> $BASH_ENV
-      - run:
-          name: set aws credentials
-          command: |
-            echo "AWS_ACCESS_KEY_ID : " ${AWS_ACCESS_KEY_ID}
-            echo "AWS_SECRET_ACCESS_KEY : " ${AWS_SECRET_ACCESS_KEY}
   execute-terraform:
     executor: terraform
     steps:
       - checkout
-      - aws-cli/install
       - attach_workspace:
           at: .
       - run: |
           cat bash.env >> $BASH_ENV
-      - run:
-          name: set aws credentials
-          command: |
-            echo "AWS_ACCESS_KEY_ID : " ${AWS_ACCESS_KEY_ID}
-            echo "AWS_SECRET_ACCESS_KEY : " ${AWS_SECRET_ACCESS_KEY}
-          # sed -i "2a \    access_key\ \=\ \"${AWS_ACCESS_KEY_ID}\"\n \    secret_key\ \=\ \"${AWS_SECRET_ACCESS_KEY}\"" terraform/provider.tf
       - terraform/init:
           path: terraform
       - terraform/validate:
@@ -81,9 +60,8 @@ jobs:
       - terraform/apply:
           path: terraform
           var: 'pgp_key=${GPG_KEY}'
-
   set-env-vars:
-    executor: node
+    executor: terraform
     steps:
       - checkout
       - attach_workspace:
@@ -95,17 +73,19 @@ jobs:
           name: set environment variables
           command: |
             set -x
-            echo export EC2_PUBLIC_IP_ADDRESS="$(aws ec2 describe-instances | jq '.Reservations[].Instances[] | select( .State.Name=="running" and .Tags[].Value=="CircleciEC2").PublicIpAddress')" >> $BASH_ENV
-            echo export AWS_ALB="$(aws elbv2 describe-load-balancers | jq '.LoadBalancers[] | select ( .LoadBalancerName=="CFn-raisetech-alb").DNSName')" >> $BASH_ENV
-            echo export S3_IAM_ACCESS_KEY="$(aws cloudformation describe-stacks --stack-name CircleciIAM | jq -r '.Stacks[] | .Outputs[] | select(.OutputKey == "StackIAMAccessKey")| .OutputValue')" >> $BASH_ENV
-            echo export S3_IAM_SECRET_ACCESS_KEY_ENCRYPTED="$(aws cloudformation describe-stacks --stack-name CircleciIAM | jq -r '.Stacks[] | .Outputs[] | select(.OutputKey == "StackIAMSecretAccessKey")| .OutputValue')" >> $BASH_ENV
+            echo export EC2_PUBLIC_IP_ADDRESS="$(aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .State.Name=="running" and .Tags[].Value=="terraform-raisetech-ec2").PublicIpAddress')" >> $BASH_ENV
+            echo export AWS_ALB="$(aws elbv2 describe-load-balancers | jq -r '.LoadBalancers[] | select ( .LoadBalancerName=="terraform-raisetech-alb").DNSName')" >> $BASH_ENV
             echo export S3_BUCKET_NAME="$(aws s3 ls | sort -nr | head -n 1 | awk '{print $NF}')" >> $BASH_ENV
             source $BASH_ENV
       - run:
           name: decode $S3_IAM_SECRET_ACCESS_KEY
           command: |
+            set -x
+            echo $(aws secretsmanager get-secret-value --secret-id terraform_s3_iam_user_secret | jq -r '.SecretString' -c) > ~/secret_key.json
+            echo export S3_IAM_ACCESS_KEY="$(jq -r '.id' ~/secret_key.json)" >> $BASH_ENV
             touch ~/secret_key.base64
-            echo ${S3_IAM_SECRET_ACCESS_KEY_ENCRYPTED} > ~/secret_key.base64
+            echo $(jq -r '.key' ~/secret_key.json) > ~/secret_key.base64
+            base64 --help
             base64 --decode -i ~/secret_key.base64 -o ~/secret_key.txt
             gpg --no-tty --batch --passphrase "${GPG_PASSPHRASE}" -o ~/secret_key --decrypt ~/secret_key.txt
             echo export S3_IAM_SECRET_ACCESS_KEY="$(cat secret_key)" >> $BASH_ENV
@@ -168,24 +148,61 @@ jobs:
             cd serverspec
             rake spec
 
+  how-to-decorde-base64:
+    executor: ubuntu
+    steps:
+      - checkout
+      - run:
+          name: extract secret from json
+          command: |
+            echo -e "{\n    \"id\": \"AKIAVVT7OZKU66U5V7W2\",\n    \"key\": \"wcACAxxAvuJUARu6EgQjBAHug+iHXv2tTOnXXqCyt8FKcmGepQciSkTqKYYye1UOhyPlqMJzAWZOGnoFmWY9atsVgF2ZSoIg8HL+uQf8CFXoEgG72foPmOLlKhhC1waFyPFjRXmuFAlp35IH3TcdexNOn95Dr1z8ZIwyaEyRyWjcwFiTSxxgJKYuIdy5FJLqItnURjByyMUA6NwxjrTJtLwqzkBmiFyJYb9nWXudxXc8etPYv9FyeATz/qm2eCDR0g7jtFTSWQFvj9FuE1BARh9xIK/IE16m76w6/uYy8tFvm/o/s75dmzFcbrFe0Kq1wYkvvEb2KUcHixsov5aStW61Cpf91nQSI1DpluZsraanVlqJJlplaqd6aLdMQVFl\"\n}" > ~/secret_key.json
+            echo export S3_IAM_ACCESS_KEY="$(jq -r '.id' ~/secret_key.json)" >> $BASH_ENV
+            source $BASH_ENV
+            touch ~/secret_key_base64.txt
+            echo $(jq -r '.key' ~/secret_key.json) > ~/secret_key_base64.txt
+      - run:
+          name: decode base64
+          command: |
+            touch ~/secret_key.txt
+            cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
+            cat ~/secret_key.txt
+      - run:
+          name: import GPG key
+          command: |
+            export GPG_TTY=$(tty)
+            source $BASH_ENV
+            echo -e ${GPG_SECRET_KEY} | gpg --import --batch --yes --passphrase "${GPG_PASSPHRASE}"
+      - run:
+          name: decrypt secrets
+          command: |
+            export GPG_TTY=$(tty)
+            source $BASH_ENV
+            gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output ~/secret_key --decrypt ~/secret_key.txt
+            cat ~/secret_key
+      - run:
+          name: cat env vars
+          command: |
+            echo export S3_IAM_SECRET_ACCESS_KEY="$(cat ~/secret_key)" >> $BASH_ENV
+            source $BASH_ENV
+            echo "S3_IAM_ACCESS_KEY : " ${S3_IAM_ACCESS_KEY}
+            echo "S3_IAM_SECRET_ACCESS_KEY : " ${S3_IAM_SECRET_ACCESS_KEY}
+
 workflows:
   version: 2
   release:
     jobs:
-      - assume-role:
-          context: aws
-      - check-env-vars:
-          requires:
-            - assume-role
-      - execute-terraform:
-          requires:
-            - assume-role
-      - set-env-vars:
-          requires:
-              - execute-terraform
+      # - assume-role:
+      #     context: aws
+      # - execute-terraform:
+      #     requires:
+      #       - assume-role
+      # - set-env-vars:
+      #     requires:
+      #         - execute-terraform
       # - execute-ansible:
       #     requires:
       #         - set-env-vars
       # - execute-serverspec:
       #     requires:
       #         - execute-ansible
+      - how-to-decorde-base64
