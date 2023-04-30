@@ -1,0 +1,172 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@3.1.5
+  ansible-playbook: orbss/ansible-playbook@0.0.5
+  terraform: circleci/terraform@3.2.1
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:18.16.0
+  ruby:
+    docker:
+      - image: cimg/ruby:3.2.2
+  terraform:
+    docker:
+      - image: cimg/deploy:2023.04
+  ubuntu:
+    docker:
+      - image: cimg/base:2023.04
+
+jobs:
+  assume-role:
+    executor: node
+    steps:
+      - checkout
+      - aws-cli/install
+      - run:
+          name: Assume role
+          command: |
+            aws_sts_credentials=$(aws sts assume-role-with-web-identity \
+              --role-arn ${AWS_IAM_ROLE_ARN} \
+              --web-identity-token ${CIRCLE_OIDC_TOKEN} \
+              --role-session-name "circleci-oidc" \
+              --duration-seconds 1800 \
+              --query "Credentials" \
+              --output "json")
+            echo export AWS_ACCESS_KEY_ID="$(echo $aws_sts_credentials | jq -r '.AccessKeyId')" >> $BASH_ENV
+            echo export AWS_SECRET_ACCESS_KEY="$(echo $aws_sts_credentials | jq -r '.SecretAccessKey')" >> $BASH_ENV
+            echo export AWS_SESSION_TOKEN="$(echo $aws_sts_credentials | jq -r '.SessionToken')" >> $BASH_ENV
+            source $BASH_ENV
+      - run: |
+          cp $BASH_ENV bash.env
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bash.env
+  execute-terraform:
+    executor: terraform
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - terraform/init:
+          path: terraform
+      - terraform/validate:
+          path: terraform
+      - terraform/apply:
+          path: terraform
+          var: 'pgp_key=${GPG_KEY}'
+  set-env-vars:
+    executor: ubuntu
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - aws-cli/install
+      - run: 
+          name: set environment variables
+          command: |
+            set -x
+            echo export EC2_PUBLIC_IP_ADDRESS="$(aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select( .State.Name=="running" and .Tags[].Value=="terraform-raisetech-ec2").PublicIpAddress')" >> $BASH_ENV
+            echo export AWS_ALB="$(aws elbv2 describe-load-balancers | jq -r '.LoadBalancers[] | select ( .LoadBalancerName=="terraform-raisetech-alb").DNSName')" >> $BASH_ENV
+            echo export S3_BUCKET_NAME="$(aws s3 ls | sort -nr | head -n 1 | awk '{print $NF}')" >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: extract secret from json
+          command: |
+            set -x
+            echo $(aws secretsmanager get-secret-value --secret-id terraform_s3_iam_user_secret | jq -r '.SecretString' -c) > ~/secret_key.json
+            echo export S3_IAM_ACCESS_KEY="$(jq -r '.id' ~/secret_key.json)" >> $BASH_ENV
+            touch ~/secret_key_base64.txt
+            echo $(jq -r '.key' ~/secret_key.json) > ~/secret_key_base64.txt
+      - run:
+          name: decode base64
+          command: |
+            touch ~/secret_key.txt
+            cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
+      - run:
+          name: import GPG key
+          command: |
+            export GPG_TTY=$(tty)
+            source $BASH_ENV
+            echo -e ${GPG_SECRET_KEY} | gpg --import --batch --yes --passphrase "${GPG_PASSPHRASE}"
+      - run:
+          name: decrypt secret
+          command: |
+            export GPG_TTY=$(tty)
+            source $BASH_ENV
+            gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output ~/secret_key --decrypt ~/secret_key.txt
+      - run: |
+          cp $BASH_ENV bash.env
+      - persist_to_workspace:
+          root: .
+          paths:
+            - bash.env
+
+  execute-ansible:
+    executor: ansible-playbook/default
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run:
+          name: set inventory file
+          command: sed -i "1i ansible_dev_target ansible_host=${EC2_PUBLIC_IP_ADDRESS} ansible_connection=ssh ansible_user=ec2-user" ansible/inventory
+      - add_ssh_keys:
+          fingerprints:
+            - "a8:4a:8c:12:da:47:4a:2f:30:7c:1d:2a:0e:24:0f:67"
+      - ansible-playbook/install:
+          version: 2.10.7
+      - ansible-playbook/playbook:
+          playbook: ansible/playbook.yml
+          playbook-options: '-i ansible/inventory'
+
+  execute-serverspec:
+    executor: ruby
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run:
+          name: install serverspec
+          command: gem install serverspec
+      - run:
+          name: create ~/.ssh/config file
+          command: |
+            touch ~/.ssh/config
+            echo 'Host ec2' > ~/.ssh/config
+            sed -i "1a \  HostName\ ${EC2_PUBLIC_IP_ADDRESS}\n\  User\ ec2-user\n\  IdentityFile \$\{KEY_FINGERPRINT\}" ~/.ssh/config
+      - run: 
+          name: execute serverspece
+          command: |
+            cd serverspec
+            rake spec
+
+workflows:
+  version: 2
+  release:
+    jobs:
+      - assume-role:
+          context: aws
+      - execute-terraform:
+          requires:
+            - assume-role
+      - set-env-vars:
+          requires:
+              - execute-terraform
+      # - execute-ansible:
+      #     requires:
+      #         - set-env-vars
+      # - execute-serverspec:
+      #     requires:
+      #         - execute-ansible
