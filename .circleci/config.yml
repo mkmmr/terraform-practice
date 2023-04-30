@@ -102,6 +102,8 @@ jobs:
             export GPG_TTY=$(tty)
             source $BASH_ENV
             gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output ~/secret_key --decrypt ~/secret_key.txt
+            echo export S3_IAM_SECRET_ACCESS_KEY="$(cat ~/secret_key)" >> $BASH_ENV
+            source $BASH_ENV
       - run: |
           cp $BASH_ENV bash.env
       - persist_to_workspace:
@@ -164,9 +166,9 @@ workflows:
       - set-env-vars:
           requires:
               - execute-terraform
-      # - execute-ansible:
-      #     requires:
-      #         - set-env-vars
+      - execute-ansible:
+          requires:
+              - set-env-vars
       # - execute-serverspec:
       #     requires:
       #         - execute-ansible
