@@ -83,7 +83,6 @@ jobs:
             set -x
             echo $(aws secretsmanager get-secret-value --secret-id terraform_s3_iam_user_secret | jq -r '.SecretString' -c) > ~/secret_key.json
             echo export S3_IAM_ACCESS_KEY="$(jq -r '.id' ~/secret_key.json)" >> $BASH_ENV
-            cat ~/secret_key.json
             touch ~/secret_key_base64.txt
             echo $(jq -r '.key' ~/secret_key.json) > ~/secret_key_base64.txt
       - run:
@@ -91,7 +90,6 @@ jobs:
           command: |
             touch ~/secret_key.txt
             cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
-            cat ~/secret_key.txt
       - run:
           name: import GPG key
           command: |
@@ -99,22 +97,11 @@ jobs:
             source $BASH_ENV
             echo -e ${GPG_SECRET_KEY} | gpg --import --batch --yes --passphrase "${GPG_PASSPHRASE}"
       - run:
-          name: decrypt secrets
+          name: decrypt secret
           command: |
             export GPG_TTY=$(tty)
             source $BASH_ENV
             gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output ~/secret_key --decrypt ~/secret_key.txt
-            cat ~/secret_key
-      - run:
-          name: cat env vars
-          command: |
-            echo export S3_IAM_SECRET_ACCESS_KEY="$(cat ~/secret_key)" >> $BASH_ENV
-            source $BASH_ENV
-            echo "EC2_PUBLIC_IP_ADDRESS : " ${EC2_PUBLIC_IP_ADDRESS}
-            echo "AWS_ALB : " ${AWS_ALB}
-            echo "S3_IAM_ACCESS_KEY : " ${S3_IAM_ACCESS_KEY}
-            echo "S3_IAM_SECRET_ACCESS_KEY : " ${S3_IAM_SECRET_ACCESS_KEY}
-            echo "S3_BUCKET_NAME : " ${S3_BUCKET_NAME}
       - run: |
           cp $BASH_ENV bash.env
       - persist_to_workspace:
@@ -165,45 +152,6 @@ jobs:
             cd serverspec
             rake spec
 
-  how-to-decorde-base64:
-    executor: ubuntu
-    steps:
-      - checkout
-      - run:
-          name: extract secret from json
-          command: |
-            echo -e "{\n    \"id\": \"AKIAVVT7OZKU66U5V7W2\",\n    \"key\": \"wcACAxxAvuJUARu6EgQjBAHug+iHXv2tTOnXXqCyt8FKcmGepQciSkTqKYYye1UOhyPlqMJzAWZOGnoFmWY9atsVgF2ZSoIg8HL+uQf8CFXoEgG72foPmOLlKhhC1waFyPFjRXmuFAlp35IH3TcdexNOn95Dr1z8ZIwyaEyRyWjcwFiTSxxgJKYuIdy5FJLqItnURjByyMUA6NwxjrTJtLwqzkBmiFyJYb9nWXudxXc8etPYv9FyeATz/qm2eCDR0g7jtFTSWQFvj9FuE1BARh9xIK/IE16m76w6/uYy8tFvm/o/s75dmzFcbrFe0Kq1wYkvvEb2KUcHixsov5aStW61Cpf91nQSI1DpluZsraanVlqJJlplaqd6aLdMQVFl\"\n}" > ~/secret_key.json
-            echo export S3_IAM_ACCESS_KEY="$(jq -r '.id' ~/secret_key.json)" >> $BASH_ENV
-            source $BASH_ENV
-            touch ~/secret_key_base64.txt
-            echo $(jq -r '.key' ~/secret_key.json) > ~/secret_key_base64.txt
-      - run:
-          name: decode base64
-          command: |
-            touch ~/secret_key.txt
-            cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
-            cat ~/secret_key.txt
-      - run:
-          name: import GPG key
-          command: |
-            export GPG_TTY=$(tty)
-            source $BASH_ENV
-            echo -e ${GPG_SECRET_KEY} | gpg --import --batch --yes --passphrase "${GPG_PASSPHRASE}"
-      - run:
-          name: decrypt secrets
-          command: |
-            export GPG_TTY=$(tty)
-            source $BASH_ENV
-            gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output ~/secret_key --decrypt ~/secret_key.txt
-            cat ~/secret_key
-      - run:
-          name: cat env vars
-          command: |
-            echo export S3_IAM_SECRET_ACCESS_KEY="$(cat ~/secret_key)" >> $BASH_ENV
-            source $BASH_ENV
-            echo "S3_IAM_ACCESS_KEY : " ${S3_IAM_ACCESS_KEY}
-            echo "S3_IAM_SECRET_ACCESS_KEY : " ${S3_IAM_SECRET_ACCESS_KEY}
-
 workflows:
   version: 2
   release:
@@ -222,4 +170,3 @@ workflows:
       # - execute-serverspec:
       #     requires:
       #         - execute-ansible
-      # - how-to-decorde-base64
