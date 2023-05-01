@@ -21,7 +21,7 @@
 - AWSのRegionをCircleCIのProject環境変数に設定する。
 
 ## 実装手順
-- Terraform実装手順の詳細は[こちら]()をご参照ください。
+- Terraform実装手順の詳細は[こちら](https://github.com/mkmmr/aws-practice/blob/main/lecture13-Terraform-ver.md)をご参照ください。
 - AnsibleとServerspecの実装手順の詳細は[CloudFormationバージョン](https://github.com/mkmmr/aws-practice/blob/main/lecture13-CloudFormation-ver.md)をご参照ください。
 
 1. Terraform 実装手順
