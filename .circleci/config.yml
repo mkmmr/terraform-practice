@@ -169,6 +169,6 @@ workflows:
       - execute-ansible:
           requires:
               - set-env-vars
-      # - execute-serverspec:
-      #     requires:
-      #         - execute-ansible
+      - execute-serverspec:
+          requires:
+              - execute-ansible
