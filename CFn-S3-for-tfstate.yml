@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  TagName:
+    Description: this is base name.
+    Type: String
+    Default: terraform-raisetech
+
+Resources:
+# ------------------------------------------------------------#
+#  S3 for .tfstate file
+# ------------------------------------------------------------#
+# create S3
+  tfstateS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${TagName}-s3-for-tfstate
+      PublicAccessBlockConfiguration: 
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+      VersioningConfiguration:
+          Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: 
+          - ServerSideEncryptionByDefault: 
+              SSEAlgorithm: AES256
+      Tags: 
+        - Key: Name
+          Value: !Sub ${TagName}-s3
