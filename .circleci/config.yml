@@ -45,6 +45,20 @@ jobs:
           root: .
           paths:
             - bash.env
+  execute-cloudformation:
+    executor: node
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - aws-cli/install
+      - run:
+          name: deploy CloudFormation
+          command: |
+            set -x
+            aws cloudformation deploy --template-file CFn-S3-for-tfstate.yml --stack-name Circleci-s3-for-tfstate
   execute-terraform:
     executor: terraform
     steps:
@@ -160,9 +174,12 @@ workflows:
     jobs:
       - assume-role:
           context: aws
-      - execute-terraform:
+      - execute-cloudformation:
           requires:
             - assume-role
+      - execute-terraform:
+          requires:
+            - execute-cloudformation
       - set-env-vars:
           requires:
               - execute-terraform
