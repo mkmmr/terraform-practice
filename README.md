@@ -50,7 +50,7 @@
 - AnsibleとServerspecはCloudFormationバージョンと同じものを使用しているため、ここでの説明は割愛しています。詳しくは[CloudFormationバージョン](https://github.com/mkmmr/circleci-practice)をご参照ください。
 
 ## 構成図
-![CircleCI自動化の構成図](http://drive.google.com/uc?export=view&id=1AcVk4rodVrmzVnSlR0y9VnpxueV5Z0D7)
+![CircleCI自動化の構成図](https://i.gyazo.com/647c51db7518f0a61a32dc30add4d19b.png)
 
 [\[↑ 目次へ\]](#目次)
 
@@ -391,7 +391,7 @@ terraform {
 - .circleci/config.ymlを編集して、Terraformより先に、CloudFormationを実行するようにする。
 
 ### 2-3-4. 無事.tfstateファイルがS3に保管された。
-![.tfstateファイルがS3に保管されている画面](http://drive.google.com/uc?export=view&id=1EJ767DFyyIVz0QTp3h2c0TcRCstRdxIX)
+![.tfstateファイルがS3に保管されている画面](https://i.gyazo.com/3d1f2e0360594c76d75a8c2a41c0ae28.png)
 
 [\[↑ 目次へ\]](#目次)
 
@@ -577,34 +577,33 @@ echo ${GPG_PASSPHRASE} | gpg --passphrase-fd 0 --decrypt --batch --no-secmem-war
 
 ### 3. 成功画面
 ### 3-1. CircleCI成功画面
-![CircleCIのWorkflow成功画面](http://drive.google.com/uc?export=view&id=1VaPKavKh8_ddVAkbePoZSKeI1i4YZHk8)
+![CircleCIのWorkflow成功画面](https://i.gyazo.com/e1cb1bf1c4a16fb0adb4ebe5421341e7.png)
 ### 3-1-1. CloudFormation成功画面
-![CircleCIでのCloudFormation成功画面](http://drive.google.com/uc?export=view&id=1M2JstNai9UtyArVNp_rIjpRC5ayDp06Z)
+![CircleCIでのCloudFormation成功画面](https://i.gyazo.com/79e5acfee0aabee51f3fa486e0aa0211.png)
 ### 3-1-2. Terraform成功画面
-![CircleCIでのTerraform成功画面1](http://drive.google.com/uc?export=view&id=1buztXhrMBqtyAB5DUyOOiDAQpbnRIil8)
-![CircleCIでのTerraform成功画面2](http://drive.google.com/uc?export=view&id=12MQZ5AFYDoJxWAfAIlTh0DPDBswwvVGQ)
+![CircleCIでのTerraform成功画面1](https://i.gyazo.com/57773a1ebe181dddc60918869c701f2c.png)
+![CircleCIでのTerraform成功画面2](https://i.gyazo.com/8e31265d63e4c22c7835fe33e85eb8e8.png)
 ### 3-1-3. 環境変数セット成功画面
-![CircleCIでの環境変数セット成功画面](http://drive.google.com/uc?export=view&id=1-5SPYo_Fd0T9W_r6vd38RTIquGk-H1R_)
+![CircleCIでの環境変数セット成功画面](https://i.gyazo.com/e005f403e9c1f1407167289ab3e5f38f.png)
 ### 3-1-4. Ansible成功画面
-![CircleCIでのAnsible成功画面1](http://drive.google.com/uc?export=view&id=1OWwNMyots7DA8_sfUYYXKPr4X_w5IsY9)
-![CircleCIでのAnsible成功画面2](http://drive.google.com/uc?export=view&id=1DKfblqlfRuS8-FVNBTBOBSC7kimcxGch)
+![CircleCIでのAnsible成功画面1](https://i.gyazo.com/b3b64027e95153b1032e99548677f697.png)
+![CircleCIでのAnsible成功画面2](https://i.gyazo.com/f30e8368b0dd609cec0c1704fede43ac.png)
 ### 3-1-5. Serverspec成功画面
-![CircleCIでのServerspec成功画面](http://drive.google.com/uc?export=view&id=1TdJzousfr8LZF97qV1fuful7oE0N7Opi)
-
+![CircleCIでのServerspec成功画面](https://i.gyazo.com/4e7225425e572f8c5392bfc0ae9b10b4.png)
 [\[↑ 目次へ\]](#目次)
 
 ### 3-2. アプリの正常動作確認
 ### New Fruit Saveした時
-![アプリの正常動作確認：新規追加した時の画面](http://drive.google.com/uc?export=view&id=1v6sH-eas7RwdWUiwt6sMadKoEhorRVGg)
+![アプリの正常動作確認：新規追加した時の画面](https://i.gyazo.com/9a1a7592254c125035932c5e2924fc40.png)
 ### 新規追加後の一覧画面
-![アプリの正常動作確認：新規追加後の一覧画面](http://drive.google.com/uc?export=view&id=1BplyfdA1PzbIu8SrW0rEV2pj0k5Ib01c)
+![アプリの正常動作確認：新規追加後の一覧画面](https://i.gyazo.com/10d53eddfa89beab2f5ac8f920457b26.png)
 ### Destroyした時
-![アプリの正常動作確認：削除した時の画面](http://drive.google.com/uc?export=view&id=18DpaFYs-MrOg1tS3XptKLSAB0vdrjyQD)
+![アプリの正常動作確認：削除した時の画面](https://i.gyazo.com/7e78ad48d53b95d90a1f27c3b22a17ba.png)
 
 [\[↑ 目次へ\]](#目次)
 
 ### 3-3. S3に画像登録確認
-![S3に画像登録確認](http://drive.google.com/uc?export=view&id=1UBaArtWFykLjf9O6LBVPhS3hKMnt5FjP)
+![S3に画像登録確認](https://i.gyazo.com/48ab7a219107d9cab4797174e80b9d7b.png)
 
 [\[↑ 目次へ\]](#目次)
 
