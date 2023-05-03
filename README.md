@@ -50,7 +50,7 @@
 - AnsibleとServerspecはCloudFormationバージョンと同じものを使用しているため、ここでの説明は割愛しています。詳しくは[CloudFormationバージョン](https://github.com/mkmmr/circleci-practice)をご参照ください。
 
 ## 構成図
-![CircleCI自動化の構成図](https://drive.google.com/file/d/1AcVk4rodVrmzVnSlR0y9VnpxueV5Z0D7/view?usp=share_link)
+![CircleCI自動化の構成図](http://drive.google.com/uc?export=view&id=1AcVk4rodVrmzVnSlR0y9VnpxueV5Z0D7)
 
 [\[↑ 目次へ\]](#目次)
 
@@ -58,13 +58,13 @@
 ### 1. Terraform 実装手順
 ### 1-1. ローカルPCにTerraformをインストール
 - 最初は自分のPCでTerraformの動作確認し、その後CircleCIに移行した。
-#### 1-1-1. Terraformをインストールする。
+### 1-1-1. Terraformをインストールする。
 ```
 $ brew install tfenv
 ```
 - AWS CLIがインストール済みの場合、AWSとの接続設定は不要。
 
-#### 1-1-2. Terrafomeで使用するコマンド
+### 1-1-2. Terrafomeで使用するコマンド
 ```
 # .tfファイルを保存しているディレクトリに移動する。
 $ cd terraform
@@ -82,7 +82,7 @@ $ terraform apply
 $ terraform destroy
 ```
 
-#### 1-1-3. コード記述
+### 1-1-3. コード記述
 公式ドキュメント等を参考に記述する。
 
 （参考）
@@ -104,7 +104,7 @@ TerrafromでIAMのAccessKeyを発行する場合、base64でエンコードさ�
 
 （参考）[Terraformで初期パスワードとシークレットアクセスキーを持つIAMユーザを作成する - Qiita](https://qiita.com/takkii1010/items/eef57e29be6cb7061d95#2-gnupg%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E5%85%AC%E9%96%8B%E9%8D%B5%E3%82%92%E4%BD%9C%E6%88%90)
 
-#### 1-2-1. GPGのペア鍵を準備する。
+### 1-2-1. GPGのペア鍵を準備する。
 - gpgをインストール
 ```
 $ brew install gpg
@@ -165,7 +165,7 @@ $ gpg -o ＜任意のファイル名＞.private.gpg --export-secret-subkey　キ
 $ cat ＜任意のファイル名＞.public.gpg | base64 | tr -d '\n' > ＜任意のファイル名＞.public.gpg.base64
 ```
 
-#### 1-2-2. TerraformにGPGの公開鍵をセットする。
+### 1-2-2. TerraformにGPGの公開鍵をセットする。
 
 - `＜任意のファイル名＞.public.gpg.base64`に出力された値をTerraformの変数に入れる。（これはGithubにはアップロードしないので、CircleCIで使用するときはCircleCIのProject環境変数にセットする。）
 
@@ -218,7 +218,7 @@ $ gpg -o secret_key --decrypt secret_key.txt
 - [GnuPG チートシート（鍵作成から失効まで）](https://text.baldanders.info/openpgp/gnupg-cheat-sheet/#revocs)
 - [variables.tfとterraform.tfvarsの違いを改めて言語化してみた](https://cloudnized.com/2022/11/21/verbalize_difference_between_variables-tf_and_terraform-tfvars/)
 
-#### 1-2-3. Ansibleを実行して、S3にアクセスできるか確認する。（アクセスできれば、復号が成功している。）
+### 1-2-3. Ansibleを実行して、S3にアクセスできるか確認する。（アクセスできれば、復号が成功している。）
 
 - Ansibleは[CloudFormationバージョンと同じもの](https://github.com/mkmmr/circleci-practice)を使用。
 
@@ -236,7 +236,7 @@ host: terraform-raisetech-rds-mysql.cqi1slx2a3cx.ap-northeast-1.rds.amazonaws.co
 [\[↑ 目次へ\]](#目次)
 
 ### 1-3. Terraformで遭遇したエラー
-#### 1-3-1. IAMユーザのシークレット作成時にエラーが出る。
+### 1-3-1. IAMユーザのシークレット作成時にエラーが出る。
 IAMユーザのシークレット作成時、`You can’t create this secret because a secret with this name is already scheduled for deletion.`が表示されシークレットを作成できない。
 
 → SecretManagerは30日間削除保留されるため、コンソール上で削除しただけでは削除できない。AWS CLIで強制削除する。
@@ -251,14 +251,14 @@ $ aws secretsmanager delete-secret --secret-id terraform_s3_iam_user_secret --fo
 
 （参考）[Secrets Manager で [You can’t create this secret because a secret with this name is already scheduled for deletion.]が表示された時の対応 | Classmethod](https://dev.classmethod.jp/articles/secrets-manager-error-recovery-window/)
 
-#### 1-3-2. yumアップデートができない。
+### 1-3-2. yumアップデートができない。
 SecurityGroupにegressを設定しておらず、yumアップデートができなかった。CloudFormationはインバウンドの設定だけでよかったが、Terraformはアウトバウンドの設定も必要。
 
 [\[↑ 目次へ\]](#目次)
 
 ### 2. CircleCIへのTerraform実装手順
 ### 2-1. 準備
-#### 2-1-1. AWSでのOIDC設定
+### 2-1-1. AWSでのOIDC設定
 - OIDC連携用のIAMロールのカスタム信頼ポリシーに、新規CircleCIプロジェクトIDを追加する。
 ```
 "Condition": {
@@ -276,7 +276,7 @@ SecurityGroupにegressを設定しておらず、yumアップデートができ�
 - [複数のキーまたは値による条件の作成 | AWSドキュメント](https://docs.aws.amazon.com/ja_jp/IAM/latest/UserGuide/reference_policies_multi-value-conditions.html)
 - [JSONポリシーについて簡単にまとめ](https://www.capybara-engineer.com/entry/2019/12/07/212926)
 
-#### 2-1-2. CircleCIに登録する用のgpg鍵の準備。
+### 2-1-2. CircleCIに登録する用のgpg鍵の準備。
 - gpg公開鍵は、base64エンコードしたもの（terraform.tfvarsにセットしたもの）をそのまま登録する。
 - gpg秘密鍵は、改行文字`\n`を追加してから登録する。
 
@@ -287,7 +287,7 @@ $ gpg -a --export-secret-subkeys キーID | cat -e | sed 's/\$/\\n/g' | pbcopy
 
 （参考）[GPG Keys as Environment Variables | CircleCI Discuss](https://discuss.circleci.com/t/gpg-keys-as-environment-variables/28641)
 
-#### 2-1-3. CircleCIにProjeectの環境変数を設定する。
+### 2-1-3. CircleCIにProjeectの環境変数を設定する。
 - GPG_KEY：gpg公開鍵（base64エンコード済み）
 - GPG_SECRET_KEY：gpg秘密鍵（改行文字`\n`が追加されたもの）
 - GPG_GPG_PASSPHRASE：パスフレーズ
@@ -296,13 +296,13 @@ $ gpg -a --export-secret-subkeys キーID | cat -e | sed 's/\$/\\n/g' | pbcopy
 [\[↑ 目次へ\]](#目次)
 
 ### 2-2. CircleCIにTerraformを実装
-#### 2-2-1. CircleCIのTerraform部分のjob構成
+### 2-2-1. CircleCIのTerraform部分のjob構成
 - workspaceからCircleCIの環境変数をstep内に取り込む。
 - terraform init
 - terraform validate
 - terraform apply
 
-##### ◆ 注意点
+#### ◆ 注意点
 - executorは、circleci/terraform@3.2.1 Orbsのデフォルトのものだと何故かworkspaceが読み込めなかったので、cimg/deployを使用する。
 - pathでterraformのディレクトリを指定しないとterraformが起動しない。
 - terraform apply時、varで公開鍵を渡してあげる。
@@ -312,8 +312,8 @@ $ gpg -a --export-secret-subkeys キーID | cat -e | sed 's/\$/\\n/g' | pbcopy
 - [cimg/deploy | circleciデベロッパー](https://circleci.com/developer/ja/images/image/cimg/deploy)
 - [CircleCI 公式のデプロイ用 Docker イメージ cimg/deploy - Qiita](https://qiita.com/suzucir/items/814cea09f08056feca69)
 
-#### 2-2-2. AWSから取得したSecretAccessKeyを復号する。
-##### ◆ base64デコード
+### 2-2-2. AWSから取得したSecretAccessKeyを復号する。
+#### ◆ base64デコード
 ```
 cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
 ```
@@ -323,7 +323,7 @@ cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
 echo $(base64 --decode ~/secret_key_base64.txt ) > ~/secret_key.txt
 ```
 
-##### ◆ gpg秘密鍵での復号
+#### ◆ gpg秘密鍵での復号
 - まず用意した秘密鍵をインポートする。
 ```
 export GPG_TTY=$(tty)
@@ -348,7 +348,7 @@ gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --o
 ### 2-3. tfstateファイルをS3バケットで管理する
 チーム開発の場合、.tfstateファイルはリモート環境（AWSの場合S3）で管理するのが主流とのことで、ここでも実装してみる。
 
-#### 2-3-1. tfstateを管理するS3バケットをCloudFormationで事前に作成する。
+### 2-3-1. tfstateを管理するS3バケットをCloudFormationで事前に作成する。
 ※ Teraformで作成しないのは、その.tfstateをどのように管理すべきかが問題となるため。
 
 - CloudFormation用ymlファイルを新規作成し、S3バケットを作成するコードを書く。
@@ -363,7 +363,7 @@ gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --o
 - [【Terraform】tfstateファイルをAWSのS3・DynamoDBで管理する](https://blog-benri-life.com/terraform-state-aws-s3-dynamodb-backend/)
 - [TerraformのtfstateファイルをS3に配置する](https://open-groove.net/terraform/terraform-tfstate-backend-s3/)
 
-#### 2-3-2. provider.tfを編集して、S3バケットで.tfstateファイルを管理するよう設定する。
+### 2-3-2. provider.tfを編集して、S3バケットで.tfstateファイルを管理するよう設定する。
 - buckendにS3を指定する。
 - ここではチーム開発を想定しているので、あわせてバージョン管理についても追記する。
 
@@ -387,11 +387,11 @@ terraform {
 
 （参考）[Terraformバージョンを固定する - Terraformのきほんと応用 - Zenn](https://zenn.dev/sway/articles/terraform_staple_fixversion)
 
-#### 2-3-3. CircleCIでCloudFormation作成について記述する。
+### 2-3-3. CircleCIでCloudFormation作成について記述する。
 - .circleci/config.ymlを編集して、Terraformより先に、CloudFormationを実行するようにする。
 
-#### 2-3-4. 無事.tfstateファイルがS3に保管された。
-![.tfstateファイルがS3に保管されている画面](https://drive.google.com/file/d/1EJ767DFyyIVz0QTp3h2c0TcRCstRdxIX/view?usp=share_link)
+### 2-3-4. 無事.tfstateファイルがS3に保管された。
+![.tfstateファイルがS3に保管されている画面](http://drive.google.com/uc?export=view&id=1EJ767DFyyIVz0QTp3h2c0TcRCstRdxIX)
 
 [\[↑ 目次へ\]](#目次)
 
@@ -510,7 +510,7 @@ cat ~/secret_key_base64.txt | base64 --decode > ~/secret_key.txt
 <details>
 <summary><h4>2-3-6. gpg秘密鍵がCircleCIに読み込めない</h4></summary>
 
-##### （１）`gpg: no valid OpenPGP data found.`エラー
+### （１）`gpg: no valid OpenPGP data found.`エラー
 - 改行文字`\n`を追加してからCircleCIのProject環境変数として登録する。
 
 （ターミナル）
@@ -531,12 +531,12 @@ $ gpg -a --export-secret-keys キーID | cat -e | sed 's/\$/\\n/g' | pbcopy
     command: echo -e "$GPG_KEY" | gpg --import
 ```
 
-##### （２）`gpg: public key decryption failed: Inappropriate ioctl for device`エラー
+### （２）`gpg: public key decryption failed: Inappropriate ioctl for device`エラー
 - import前に`export GPG_TTY=$(tty)`を入れる。  
 
 （参考）[GnuPG2にpublic key decryption failed: Inappropriate ioctl for deviceと怒られた時の対処法 - HatenaBlog](https://kazblog.hateblo.jp/entry/2018/05/24/210530)
 
-##### （３）import時にパスフレーズを求められる。
+### （３）import時にパスフレーズを求められる。
 - `--import --batch --yes --passphrase "${GPG_PASSPHRASE}`でクリア。
 
 → これでやっとgpg秘密鍵を読み込めるように。
@@ -545,12 +545,12 @@ $ gpg -a --export-secret-keys キーID | cat -e | sed 's/\$/\\n/g' | pbcopy
 <details>
 <summary><h4>2-3-7. gpg秘密鍵を使った復号ができない</h4></summary>
 
-##### （１）`gpg: public key decryption failed: Inappropriate ioctl for device`エラー
+### （１）`gpg: public key decryption failed: Inappropriate ioctl for device`エラー
 - importの時と同じ。最初に`export GPG_TTY=$(tty)`を入れる。  
 
 （参考）[GnuPG2にpublic key decryption failed: Inappropriate ioctl for deviceと怒られた時の対処法 - HatenaBlog](https://kazblog.hateblo.jp/entry/2018/05/24/210530)
 
-##### （２）import時にパスフレーズを求められる。
+### （２）import時にパスフレーズを求められる。
 - `--pinentry-mode loopback`で回避可能。
 ```
 gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --output ~/secret_key --decrypt ~/secret_key.txt
@@ -577,34 +577,34 @@ echo ${GPG_PASSPHRASE} | gpg --passphrase-fd 0 --decrypt --batch --no-secmem-war
 
 ### 3. 成功画面
 ### 3-1. CircleCI成功画面
-![CircleCIのWorkflow成功画面](https://drive.google.com/file/d/1VaPKavKh8_ddVAkbePoZSKeI1i4YZHk8/view?usp=share_link)
-#### 3-1-1. CloudFormation成功画面
-![CircleCIでのCloudFormation成功画面](https://drive.google.com/file/d/1M2JstNai9UtyArVNp_rIjpRC5ayDp06Z/view?usp=share_link)
-#### 3-1-2. Terraform成功画面
-![CircleCIでのTerraform成功画面1](https://drive.google.com/file/d/1buztXhrMBqtyAB5DUyOOiDAQpbnRIil8/view?usp=share_link)
-![CircleCIでのTerraform成功画面2](https://drive.google.com/file/d/12MQZ5AFYDoJxWAfAIlTh0DPDBswwvVGQ/view?usp=share_link)
-#### 3-1-3. 環境変数セット成功画面
-![CircleCIでの環境変数セット成功画面](https://drive.google.com/file/d/1-5SPYo_Fd0T9W_r6vd38RTIquGk-H1R_/view?usp=share_link)
-#### 3-1-4. Ansible成功画面
-![CircleCIでのAnsible成功画面1](https://drive.google.com/file/d/1OWwNMyots7DA8_sfUYYXKPr4X_w5IsY9/view?usp=share_link)
-![CircleCIでのAnsible成功画面2](https://drive.google.com/file/d/1DKfblqlfRuS8-FVNBTBOBSC7kimcxGch/view?usp=share_link)
-#### 3-1-5. Serverspec成功画面
-![CircleCIでのServerspec成功画面](https://drive.google.com/file/d/1TdJzousfr8LZF97qV1fuful7oE0N7Opi/view?usp=share_link)
+![CircleCIのWorkflow成功画面](http://drive.google.com/uc?export=view&id=1VaPKavKh8_ddVAkbePoZSKeI1i4YZHk8)
+### 3-1-1. CloudFormation成功画面
+![CircleCIでのCloudFormation成功画面](http://drive.google.com/uc?export=view&id=1M2JstNai9UtyArVNp_rIjpRC5ayDp06Z)
+### 3-1-2. Terraform成功画面
+![CircleCIでのTerraform成功画面1](http://drive.google.com/uc?export=view&id=1buztXhrMBqtyAB5DUyOOiDAQpbnRIil8)
+![CircleCIでのTerraform成功画面2](http://drive.google.com/uc?export=view&id=12MQZ5AFYDoJxWAfAIlTh0DPDBswwvVGQ)
+### 3-1-3. 環境変数セット成功画面
+![CircleCIでの環境変数セット成功画面](http://drive.google.com/uc?export=view&id=1-5SPYo_Fd0T9W_r6vd38RTIquGk-H1R_)
+### 3-1-4. Ansible成功画面
+![CircleCIでのAnsible成功画面1](http://drive.google.com/uc?export=view&id=1OWwNMyots7DA8_sfUYYXKPr4X_w5IsY9)
+![CircleCIでのAnsible成功画面2](http://drive.google.com/uc?export=view&id=1DKfblqlfRuS8-FVNBTBOBSC7kimcxGch)
+### 3-1-5. Serverspec成功画面
+![CircleCIでのServerspec成功画面](http://drive.google.com/uc?export=view&id=1TdJzousfr8LZF97qV1fuful7oE0N7Opi)
 
 [\[↑ 目次へ\]](#目次)
 
 ### 3-2. アプリの正常動作確認
-#### New Fruit Saveした時
-![アプリの正常動作確認：新規追加した時の画面](https://drive.google.com/file/d/1v6sH-eas7RwdWUiwt6sMadKoEhorRVGg/view?usp=share_link)
-#### 新規追加後の一覧画面
-![アプリの正常動作確認：新規追加後の一覧画面](https://drive.google.com/file/d/1BplyfdA1PzbIu8SrW0rEV2pj0k5Ib01c/view?usp=share_link)
-#### Destroyした時
-![アプリの正常動作確認：削除した時の画面](https://drive.google.com/file/d/18DpaFYs-MrOg1tS3XptKLSAB0vdrjyQD/view?usp=share_link)
+### New Fruit Saveした時
+![アプリの正常動作確認：新規追加した時の画面](http://drive.google.com/uc?export=view&id=1v6sH-eas7RwdWUiwt6sMadKoEhorRVGg)
+### 新規追加後の一覧画面
+![アプリの正常動作確認：新規追加後の一覧画面](http://drive.google.com/uc?export=view&id=1BplyfdA1PzbIu8SrW0rEV2pj0k5Ib01c)
+### Destroyした時
+![アプリの正常動作確認：削除した時の画面](http://drive.google.com/uc?export=view&id=18DpaFYs-MrOg1tS3XptKLSAB0vdrjyQD)
 
 [\[↑ 目次へ\]](#目次)
 
 ### 3-3. S3に画像登録確認
-![S3に画像登録確認](https://drive.google.com/file/d/1UBaArtWFykLjf9O6LBVPhS3hKMnt5FjP/view?usp=share_link)
+![S3に画像登録確認](http://drive.google.com/uc?export=view&id=1UBaArtWFykLjf9O6LBVPhS3hKMnt5FjP)
 
 [\[↑ 目次へ\]](#目次)
 
