@@ -62,9 +62,10 @@ jobs:
           var: 'pgp_key=${GPG_KEY}'
       - run:
           name: move local .tfstate to s3
-          command: sed -i 's/\#\ //g' terraform/provider.tf
-      - terraform/init:
-          path: terraform
+          command: |
+            sed -i 's/\#\ //g' terraform/provider.tf
+            cd terraform
+            echo yes | terraform init
   set-env-vars:
     executor: ubuntu
     steps:
