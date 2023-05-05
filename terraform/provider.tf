@@ -10,9 +10,9 @@ terraform {
         }
     }
 
-    backend "s3" {
-        bucket = "terraform-raisetech-s3-for-tfstate"
-        key    = "terraform.tfstate"
-        region = "ap-northeast-1"
-    }
+    # backend "s3" {
+    #     bucket = "terraform-raisetech-s3-for-tfstate"
+    #     key    = "terraform.tfstate"
+    #     region = "ap-northeast-1"
+    # }
 }

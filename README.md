@@ -348,10 +348,10 @@ gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --o
 ### 2-3. tfstateファイルをS3バケットで管理する
 チーム開発の場合、.tfstateファイルはリモート環境（AWSの場合S3）で管理するのが主流とのことで、ここでも実装してみる。
 
-### 2-3-1. tfstateを管理するS3バケットをCloudFormationで事前に作成する。
-※ Teraformで作成しないのは、その.tfstateをどのように管理すべきかが問題となるため。
+### 2-3-1. tfstateを管理するS3バケットをterraformで作成する。
+Teraformで他のリソース作成時に、.tfstate管理用S3バケットも一緒に作成する。
 
-- CloudFormation用ymlファイルを新規作成し、S3バケットを作成するコードを書く。
+- tfファイルを新規作成し、S3バケットを作成するコードを書く。
     - 「パブリックアクセス」をブロックする。
     - 「バケットのバージョニング」を有効化する。
     - 「デフォルトの暗号化」を有効化する。
@@ -364,8 +364,7 @@ gpg --no-tty --batch --passphrase "$GPG_PASSPHRASE" --pinentry-mode loopback --o
 - [TerraformのtfstateファイルをS3に配置する](https://open-groove.net/terraform/terraform-tfstate-backend-s3/)
 
 ### 2-3-2. provider.tfを編集して、S3バケットで.tfstateファイルを管理するよう設定する。
-- buckendにS3を指定する。
-- ここではチーム開発を想定しているので、あわせてバージョン管理についても追記する。
+- terraformにて各種リソース作成後、buckendにS3を指定する。
 
 （terraform/provider.tf）
 ```
@@ -387,11 +386,21 @@ terraform {
 
 （参考）[Terraformバージョンを固定する - Terraformのきほんと応用 - Zenn](https://zenn.dev/sway/articles/terraform_staple_fixversion)
 
-### 2-3-3. CircleCIでCloudFormation作成について記述する。
-- .circleci/config.ymlを編集して、Terraformより先に、CloudFormationを実行するようにする。
+### 2-3-3. もう一度`terraform init`して.tfstateファイルの管理をS3に移す。
+- backend変更を許可しないといけないので、orbsではなくコマンドを使う。
+
+（.circleci/config.yml）
+```
+- run:
+  name: move local .tfstate to s3
+  command: |
+    sed -i 's/\#\ //g' terraform/provider.tf
+    cd terraform
+    echo yes | terraform init
+```
 
 ### 2-3-4. 無事.tfstateファイルがS3に保管された。
-![.tfstateファイルがS3に保管されている画面](https://i.gyazo.com/3d1f2e0360594c76d75a8c2a41c0ae28.png)
+![.tfstateファイルがS3に保管されている画面](https://i.gyazo.com/f565f2a9b246b94b39f60bd2065cf899.png)
 
 [\[↑ 目次へ\]](#目次)
 
@@ -573,23 +582,109 @@ echo ${GPG_PASSPHRASE} | gpg --passphrase-fd 0 --decrypt --batch --no-secmem-war
 
 </details>
 
+<details>
+<summary><h4>2-3-8. 2回目の`terraform init`が通らない</h4></summary>
+
+- １回目の`terraform init`後にterraformにて.tfstateファイル管理用S3を作成する。
+- ２回目の`terraform init`にてbackendをS3に変更する。
+
+しかし、2回目の`terraform init`がなかなか通らない。
+backendを変更しても良いか対話型コマンドで変更許可を求められ、この対話をなかなか回避できなかった。
+
+### ◆ orbs circleci/terraform@3.2.1 の通常コマンドを使用してみる。 →　だめ
+```
+- steps:
+  - terraform/init:
+      path: terraform
+
+Initializing the backend...
+╷
+│ Error: Can't ask approval for state migration when interactive input is disabled.
+│ 
+│ Please remove the "-input=false" option and try again.
+```
+
+### ◆ コマンドで`terraform init`してみる → だめ
+```
+$ terraform init
+
+Error: Error asking for confirmation: EOF
+```
+対話型でyesの入力を求められて止まる。
+
+
+### ◆ オプション`-input=false`で対話型を回避してみる → だめ
+```
+$ terraform init -input=false
+
+Initializing the backend...
+╷
+│ Error: Can't ask approval for state migration when interactive input is disabled.
+│ 
+│ Please remove the "-input=false" option and try again.
+
+```
+
+対話型を回避するためのオプション`-input=false`を使用するとエラーが出る。
+公式の説明にも、場合によっては必ず許可が必要だから対話を回避できないことがある、との旨の記載がある。
+
+### ◆ terraform applayの自動承認オプション`-auto-approve`を使ってみる → だめ
+```
+$ terraform init -reconfigure -auto-approve
+
+Usage: terraform [global options] init [options]
+```
+
+`terraform apply`には許可を自動で行える`-auto-approve`というオプションが存在するが、`terraform init`にはそもそもそんなオプションは存在しないと怒られる。
+
+### ◆ パイプラインでyesを通してみる。 →　だめ
+```
+yes | terraform init
+```
+
+出力上は`Terraform has been successfully initialized!`と出るが、`Exited with code exit status 141`エラーでCIが止まる。
+
+（参考）同じ症状の人たち
+
+- [ailed Build: Exit Code 141 | circleci Discuss](https://discuss.circleci.com/t/failed-build-exit-code-141/26335)
+- [Using yes with interactive script results in exit code 141 - stackoverflow](https://stackoverflow.com/questions/53126057/using-yes-with-interactive-script-results-in-exit-code-141)
+
+### ◆ exit code 141を無視してみる。 → だめ
+`exit code 141`はSIGPIPEが発生した時の番号。
+閉じてるパイプに書き込みしようとすると発生するらしい。
+
+```
+yes | terraform init || { ec=$?; [ $ec -eq 141 ] && true || (exit $ec); }
+```
+で、exit code 141を無視して常に成功になるよう上書きしてみる。
+exit code 141でCircleCIが止まることは無くなったが、.tfstateファイルはS3に管理されていない。
+
+（参考）[Ignoring Bash pipefail for error code 141 - stackoverflow](https://stackoverflow.com/questions/22464786/ignoring-bash-pipefail-for-error-code-141)
+
+### ◆ yesの前にechoをつけてみる。 → いけた！
+```
+echo yes | terraform init
+```
+で、無事.tfstateファイルがS3の管理下に置かれるように。
+![.tfstateファイルがS3に保管されている画面](https://i.gyazo.com/f565f2a9b246b94b39f60bd2065cf899.png)
+
+</details>
+
 [\[↑ 目次へ\]](#目次)
 
 ### 3. 成功画面
 ### 3-1. CircleCI成功画面
-![CircleCIのWorkflow成功画面](https://i.gyazo.com/e1cb1bf1c4a16fb0adb4ebe5421341e7.png)
-### 3-1-1. CloudFormation成功画面
-![CircleCIでのCloudFormation成功画面](https://i.gyazo.com/79e5acfee0aabee51f3fa486e0aa0211.png)
-### 3-1-2. Terraform成功画面
-![CircleCIでのTerraform成功画面1](https://i.gyazo.com/57773a1ebe181dddc60918869c701f2c.png)
-![CircleCIでのTerraform成功画面2](https://i.gyazo.com/8e31265d63e4c22c7835fe33e85eb8e8.png)
-### 3-1-3. 環境変数セット成功画面
-![CircleCIでの環境変数セット成功画面](https://i.gyazo.com/e005f403e9c1f1407167289ab3e5f38f.png)
-### 3-1-4. Ansible成功画面
-![CircleCIでのAnsible成功画面1](https://i.gyazo.com/b3b64027e95153b1032e99548677f697.png)
-![CircleCIでのAnsible成功画面2](https://i.gyazo.com/f30e8368b0dd609cec0c1704fede43ac.png)
-### 3-1-5. Serverspec成功画面
-![CircleCIでのServerspec成功画面](https://i.gyazo.com/4e7225425e572f8c5392bfc0ae9b10b4.png)
+![CircleCIのWorkflow成功画面](https://i.gyazo.com/c37ea20e33bf7d54ecdc0e565ab8d7cd.png)
+### 3-1-1. Terraform成功画面
+![CircleCIでのTerraform成功画面1](https://i.gyazo.com/db6291cb95246cd87362f8e58d2671bd.png)
+![CircleCIでのTerraform成功画面2](https://i.gyazo.com/22db7fa6860b8bb91c08e8aa980bf815.png)
+### .tfstateの管理をS3に変更成功
+![CircleCIでのTerraform成功画面3](https://i.gyazo.com/7f3cf189a8755f248c065fc714555d4f.png)
+### 3-1-2. Ansible成功画面
+![CircleCIでのAnsible成功画面1](https://i.gyazo.com/ca32b1e62be6d863451e4e66fb592936.png)
+![CircleCIでのAnsible成功画面2](https://i.gyazo.com/528d38c3e5076dca9d3c48f5e48620a8.png)
+### 3-1-3. Serverspec成功画面
+![CircleCIでのServerspec成功画面](https://i.gyazo.com/554176e0a3f65dc71b5ac5cca6a3f18f.png)
 [\[↑ 目次へ\]](#目次)
 
 ### 3-2. アプリの正常動作確認
